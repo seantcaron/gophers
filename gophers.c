@@ -93,7 +93,7 @@ int main(int argc, char **argv) {
     fprint(lgfd, "%s Logfile: %s\n", tstamp, logfile);
 
     /* listen on the specified port for gopher clients */
-    sprintf( anc_buf, "tcp!*!%s", port );
+    sprintf(anc_buf, "tcp!*!%s", port);
 
     acfd = announce(anc_buf, adir);
 	
@@ -153,7 +153,7 @@ int main(int argc, char **argv) {
             readaline(dfd, &line);
 
             /* if client just sent CR+LF give them the root directory */
-            if ( (line[0] == '\r') && (line[1] == '\n') ) {
+            if ((line[0] == '\r') && (line[1] == '\n')) {
                 strcpy(line, "");
 
                 path = malloc(strlen(rootdir)*sizeof(char)+1);
@@ -178,7 +178,7 @@ int main(int argc, char **argv) {
                 /* add our gopher server directory root to get a real file path */
                 path = malloc((strlen(rootdir)+strlen(line)+1)*sizeof(char));
 
-                if ( path == 0 ) {
+                if (path == 0) {
                     exits("MALLOC");
                 }
 
@@ -228,7 +228,7 @@ int main(int argc, char **argv) {
                 /* try to open the directory and fail gracefully if it doesnt exist */
                 rfd = open(path, OREAD);
 
-                if ( rfd < 0 ) {
+                if (rfd < 0) {
                     timestamp(tstamp);
                     fprint(lgfd, "%s ERROR: Cannot open directory %s; child process exiting.\n", tstamp, path );
                     close(lgfd);
@@ -276,13 +276,13 @@ int main(int argc, char **argv) {
 
                     strcpy(temp, line);
 
-                    if ( temp[strlen(temp)-1] != '/' ) {
+                    if (temp[strlen(temp)-1] != '/') {
                         strcat(temp, "/");
                     }
 
                     strcat(temp, dir[c].name);
 
-                    if ( strcmp(dir[c].name, ".gopher") != 0 ) {
+                    if (strcmp(dir[c].name, ".gopher") != 0) {
                         /* for now, hard code the FQDN of the gopher server in the statement below */
                         fprint(dfd, "%c%s\t%s\t%s\t70\r\n", filetyp[c],
                         dir[c].name, temp, HOST_NAME);
@@ -302,7 +302,7 @@ int main(int argc, char **argv) {
             /* try to open the file and fail gracefully if it doesnt exist */
             qfd = open(path, OREAD);
 
-            if ( qfd < 0 ) {
+            if (qfd < 0) {
                 timestamp(tstamp);
                 fprint(lgfd, "%s ERROR: Cannot open file %s; child process exiting.\n", tstamp, path);
                 close(lgfd);
@@ -401,7 +401,7 @@ int dotgopher(int netfd, int logfd, char *rootd) {
                 exits("REALLOC");
             }
 
-            if ( *(line+len-1) == 10 ) {
+            if (*(line+len-1) == 10) {
                 *(line+len-1) = '\0';
 
                 /* 
@@ -415,11 +415,11 @@ int dotgopher(int netfd, int logfd, char *rootd) {
                  * for this programmatically in the future.
                 */
 
-                if ( ((line[0] == '0') || (line[0] == '1') || (line[0] == '2') || (line[0] == '3') ||
+                if (((line[0] == '0') || (line[0] == '1') || (line[0] == '2') || (line[0] == '3') ||
                     (line[0] == '4') || (line[0] == '5') || (line[0] == '6') || (line[0] == '7') ||
                     (line[0] == '8') || (line[0] == '9') || (line[0] == 'd') || (line[0] == 'g') ||
                     (line[0] == 'h') || (line[0] == 'i' ) || (line[0] == 'l') || (line[0] == 's')) &&
-                    (counttabs(line) == 3) ) {
+                    (counttabs(line) == 3)) {
 
                     fprint(netfd, "%s\r\n", line);
                 }
@@ -433,7 +433,7 @@ int dotgopher(int netfd, int logfd, char *rootd) {
                 free(line);
                 line = malloc(sizeof(char));
 
-                if ( line == 0 ) {
+                if (line == 0) {
                     exits("MALLOC");
                 }
 
@@ -445,7 +445,7 @@ int dotgopher(int netfd, int logfd, char *rootd) {
             }
 
             /* eof */
-            if ( n == 0 ) {
+            if (n == 0) {
                 break;
             }
         }
