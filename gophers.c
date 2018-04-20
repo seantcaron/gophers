@@ -17,572 +17,506 @@ int readaline(int infd, char **ptr);
 int counttabs(char *lin);
 
 int main(int argc, char **argv) {
+    int dfd, acfd, lcfd, rfd, qfd, lgfd;
+    char adir[40], ldir[40], *line, anc_buf[40];
+    int i, n, w, r = 0;
+    long ndirs, c;
 
-	int dfd, acfd, lcfd, rfd, qfd, lgfd;
-	char adir[40], ldir[40], *line, anc_buf[40];
-	int i, n, w, r = 0;
-	long ndirs, c;
+    Dir *dir;
+    char *filetyp;
 
-	Dir *dir;
-	char *filetyp;
+    char *port, *rootdir, *logfile;
 
-	char *port, *rootdir, *logfile;
+    char tstamp[32];
 
-	char tstamp[32];
+    char *path, *temp;
+    char fbuf[512];
 
-	char *path, *temp;
-	char fbuf[512];
+    if (argc != 4) {
+        print("usage: %s port rootdir logfile\n", argv[0]);
+        exits(0);
+    }
 
-	if ( argc != 4 ) {
-		print("usage: %s port rootdir logfile\n", argv[0]);
-		exits(0);
-	}
+    /* create some more descriptive variables for the arguments and allocate memory for them */
+    port = malloc(strlen(argv[1])*sizeof(char)+1);
 
-	/* create some more descriptive variables for the arguments and allocate memory for them */
+    if (port == 0) {
+        exits("MALLOC");
+    }
 
-	port = malloc(strlen(argv[1])*sizeof(char)+1);
+    strcpy(port, argv[1]);
 
-	if ( port == 0 ) {
-		exits("MALLOC");
-	}
+    rootdir = malloc(strlen(argv[2])*sizeof(char)+1);
 
-	strcpy(port, argv[1]);
+    if (rootdir == 0) {
+        exits("MALLOC");
+    }
 
-	rootdir = malloc(strlen(argv[2])*sizeof(char)+1);
+    strcpy(rootdir, argv[2]);
 
-	if ( rootdir == 0 ) {
-		exits("MALLOC");
-	}
+    logfile = malloc(strlen(argv[3])*sizeof(char)+1);
 
-	strcpy(rootdir, argv[2]);
+    if (logfile == 0) {
+        exits("MALLOC");
+    }
 
-	logfile = malloc(strlen(argv[3])*sizeof(char)+1);
+    strcpy(logfile, argv[3]);
 
-	if ( logfile == 0 ) {
-		exits("MALLOC");
-	}
+    /* remove trailing slash from root directory and logfile if one was included by the user */
+    if (rootdir[strlen(rootdir)-1] == '/') {
+        rootdir[strlen(rootdir)-1] = '\0';
+    }
 
-	strcpy(logfile, argv[3]);
+    if (logfile[strlen(logfile)-1] == '/') {
+        logfile[strlen(logfile)-1] = '\0';
+    }
 
-	/* remove trailing slash from root directory and logfile if one was included by the user */
+    /* if logfile exists append to it, otherwise create it */
+    if ((lgfd = open(logfile, OWRITE)) < 0) {	
+        if ((lgfd = create(logfile, OWRITE, 0777)) < 0) {
+            printf("ERROR: Cannot create logfile; exiting.\n");
 
-	if ( rootdir[strlen(rootdir)-1] == '/' ) {
-		rootdir[strlen(rootdir)-1] = '\0';
-	}
+            free(logfile);
+            free(rootdir);
+            free(port);
 
-	if ( logfile[strlen(logfile)-1] == '/' ) {
-		logfile[strlen(logfile)-1] = '\0';
-	}
+            exits("CREATE");
+        }
+    }
 
-	/* if logfile exists append to it, otherwise create it */
+    /* if the logfile already exists go to the end of the file, otherwise this has no effect */
+    seek(lgfd, 0, 2);
 
-	if ( (lgfd = open(logfile, OWRITE)) < 0) {	
+    timestamp(tstamp);
+    fprint(lgfd, "%s Starting gopher server on port %s\n", tstamp, port);
+    fprint(lgfd, "%s Root directory: %s\n", tstamp, rootdir);
+    fprint(lgfd, "%s Logfile: %s\n", tstamp, logfile);
 
-		if ( (lgfd = create(logfile, OWRITE, 0777)) < 0) {
-		
-			printf("ERROR: Cannot create logfile; exiting.\n");
+    /* listen on the specified port for gopher clients */
+    sprintf( anc_buf, "tcp!*!%s", port );
 
-			free(logfile);
-			free(rootdir);
-			free(port);
-
-			exits("CREATE");
-		}
-	}
-
-	/* if the logfile already exists go to the end of the file, otherwise this has no effect */
-
-	seek(lgfd, 0, 2);
-
-	timestamp(tstamp);
-	fprint(lgfd, "%s Starting gopher server on port %s\n", tstamp, port);
-	fprint(lgfd, "%s Root directory: %s\n", tstamp, rootdir);
-	fprint(lgfd, "%s Logfile: %s\n", tstamp, logfile);
-
-	/* listen on the specified port for gopher clients */
-
-	sprintf( anc_buf, "tcp!*!%s", port );
-
-	acfd = announce(anc_buf, adir);
+    acfd = announce(anc_buf, adir);
 	
-	if ( acfd < 0 ) {
+    if (acfd < 0) {
+        free(port);
+        free(logfile);
+        free(rootdir);
 
-		free(port);
-		free(logfile);
-		free(rootdir);
+        timestamp(tstamp);
+        fprint(lgfd, "%s ERROR: announce() failed; exiting.\n", tstamp);
+        close(lgfd);
 
-		timestamp(tstamp);
-		fprint(lgfd, "%s ERROR: announce() failed; exiting.\n", tstamp);
-		close(lgfd);
+        exits("ANNOUNCE");
+    }
 
-		exits("ANNOUNCE");
-	}
-
-	while(1) {
-
-		/* listen for a call */
-
-		lcfd = listen(adir, ldir);
+    while(1) {
+        /* listen for a call */
+        lcfd = listen(adir, ldir);
 		
-		if ( lcfd < 0 ) {
+        if (lcfd < 0) {
+            free(port);
+            free(logfile);
+            free(rootdir);
 
-			free(port);
-			free(logfile);
-			free(rootdir);
+            timestamp(tstamp);
+            fprint(lgfd, "%s ERROR: listen() failed; exiting.\n", tstamp);
+            close(lgfd);
 
-			timestamp(tstamp);
-			fprint(lgfd, "%s ERROR: listen() failed; exiting.\n", tstamp);
-			close(lgfd);
+            exits("LISTEN");
+        }
 
-			exits("LISTEN");
-		}
-
-		/* fork a process to handle the request */
-
-		switch( fork() ) {
-
-			/* fork error */
-
-			case -1:
-				close(lcfd);
-
-				break;
+        /* fork a process to handle the request */
+        switch(fork()) {
+            /* fork error */
+            case -1:
+                close(lcfd);
+                break;
 				
-			/* child */
+            /* child */
+            case 0:
 
-			case 0:
+            /* accept the call and open the data file */
+            dfd = accept(lcfd, ldir);
 
-				/* accept the call and open the data file */
+            if (dfd < 0) {
+                close(dfd);
+                close(lcfd);
 
-				dfd = accept(lcfd, ldir);
+                timestamp(tstamp);
+                fprint(lgfd, "%s ERROR: accept() failed; child process exiting.\n", tstamp);
+                close(lgfd);
 
-				if ( dfd < 0 ) {
+                exits("ACCEPT");
+            }
 
-					close(dfd);
-					close(lcfd);
+            /* read a line from the network */
+            readaline(dfd, &line);
 
-					timestamp(tstamp);
-					fprint(lgfd, "%s ERROR: accept() failed; child process exiting.\n", tstamp);
-					close(lgfd);
+            /* if client just sent CR+LF give them the root directory */
+            if ( (line[0] == '\r') && (line[1] == '\n') ) {
+                strcpy(line, "");
 
-					exits("ACCEPT");
-				}
+                path = malloc(strlen(rootdir)*sizeof(char)+1);
 
-				/* read a line from the network */
+                if (path == 0) {
+                    exits("MALLOC");
+                }
 
-				readaline(dfd, &line);
+                strcpy(path, rootdir);
+            }
 
-				/* if client just sent CR+LF give them the root directory */
+            /* otherwise the client actually requested a particular file or directory */
 
-				if ( (line[0] == '\r') && (line[1] == '\n') ) {
-					strcpy(line, "");
+            else {
+                /* strip CR+LF from input */
+                for (i = 0; i < strlen(line); i++) {
+                    if ( line[i] == '\r' ) {
+                        line[i] = '\0';
+                    }
+                }
 
-					path = malloc(strlen(rootdir)*sizeof(char)+1);
+                /* add our gopher server directory root to get a real file path */
+                path = malloc((strlen(rootdir)+strlen(line)+1)*sizeof(char));
 
-					if (path == 0) {
-						exits("MALLOC");
-					}
+                if ( path == 0 ) {
+                    exits("MALLOC");
+                }
 
-					strcpy(path, rootdir);
-				}
+                strcpy(path, strcat(rootdir, line));
+            }
 
-				/* otherwise the client actually requested a particular file or directory */
+            timestamp(tstamp);
+            fprint(lgfd, "%s Client requested %s\n", tstamp, path);
 
-				else {
+            /* figure out if this is a file or a directory */
+            dir = dirstat(path);
 
-					/* strip CR+LF from input */
+            /* try to exit gracefully if the file or directory does not exist */
+            if (dir == nil) {
+                timestamp(tstamp);
+                fprint(lgfd, "%s ERROR: Cannot find file or directory %s; child process exiting.\n", tstamp, path);
+                close(lgfd);
 
-					for (i = 0; i < strlen(line); i++) {
-						if ( line[i] == '\r' ) {
-							line[i] = '\0';
-						}
-					}
+                close(dfd);
+                close(lcfd);
 
-					/* add our gopher server directory root to get a real file path */
+                free(line);
+                free(path);
 
-					path = malloc((strlen(rootdir)+strlen(line)+1)*sizeof(char));
+                exits(0);
+            }
 
-					if ( path == 0 ) {
-						exits("MALLOC");
-					}
+            /* directory */
+            if ((dir->mode & 0x80000000) == 0x80000000) {
 
-					strcpy(path, strcat(rootdir, line));
-				}
+            /*
+             * first we look for a .gopher file. if in the subsequent
+             * routine. if we find one, we basically take it to be raw
+             * gopher markup language and give that, and only that,
+             * straight to the client.
+            */
 
-				timestamp(tstamp);
-				fprint(lgfd, "%s Client requested %s\n", tstamp, path);
+            r = dotgopher(dfd, lgfd, path);
 
-				/* figure out if this is a file or a directory */
+            /*
+             * if there is no .gopher file, we just fall back to a sort of
+             * legacy mode, where the server will generate a directory
+             * listing and send that to the client.
+            */
 
-				dir = dirstat(path);
+            if (r != 1) {
+                /* try to open the directory and fail gracefully if it doesnt exist */
+                rfd = open(path, OREAD);
 
-				/* try to exit gracefully if the file or directory does not exist */
+                if ( rfd < 0 ) {
+                    timestamp(tstamp);
+                    fprint(lgfd, "%s ERROR: Cannot open directory %s; child process exiting.\n", tstamp, path );
+                    close(lgfd);
 
-				if ( dir == nil ) {
+                    close(dfd);
+                    close(lcfd);
 
-					timestamp(tstamp);
-					fprint(lgfd, "%s ERROR: Cannot find file or directory %s; child process exiting.\n", tstamp, path);
-					close(lgfd);
+                    free(line);
+                    free(path);
 
-					close(dfd);
-					close(lcfd);
+                    exits(0);
+                }
 
-					free(line);
-					free(path);
+                ndirs = dirreadall(rfd, &dir);
 
-					exits(0);
-				}
+                close(rfd);
 
-				/* directory */
+                filetyp = malloc((ndirs * sizeof(char)));
 
-				if ( (dir->mode & 0x80000000) == 0x80000000 ) {
+                if (filetyp == 0) {
+                    exits("MALLOC");
+                }
 
-					/*
-					  * first we look for a .gopher file. if in the subsequent
-					  * routine. if we find one, we basically take it to be raw
-					  * gopher markup language and give that, and only that,
-					  * straight to the client.
-					*/
+                timestamp(tstamp);
+                fprint(lgfd, "%s Read %ld directory entries from %s\n", tstamp, ndirs, path);
 
-					r = dotgopher(dfd, lgfd, path);
+                /* classify each entry as either a file or a directory */
+                for (c = 0; c < ndirs; c++) {
+                    if ((dir[c].mode & 0x80000000) == 0x80000000 ) {
+                        filetyp[c] = '1';
+                    }
 
-					/*
-					  * if there is no .gopher file, we just fall back to a sort of
-					  * legacy mode, where the server will generate a directory
-					  * listing and send that to the client.
-					*/
+                    else {
+                        filetyp[c] = '0';
+                    }
+                }
 
-					if ( r != 1 ) {
+                /* give the directory listing to the client, line by line */
+                for (c = 0; c < ndirs; c++) {
+                    temp = malloc((strlen(line)+strlen(dir[c].name)+10)*sizeof(char));
 
-						/* try to open the directory and fail gracefully if it doesnt exist */
+                    if (temp == 0) {
+                        exits("MALLOC");
+                    }
 
-						rfd = open(path, OREAD);
+                    strcpy(temp, line);
 
-						if ( rfd < 0 ) {
+                    if ( temp[strlen(temp)-1] != '/' ) {
+                        strcat(temp, "/");
+                    }
 
-							timestamp(tstamp);
-							fprint(lgfd, "%s ERROR: Cannot open directory %s; child process exiting.\n", tstamp, path );
-							close(lgfd);
+                    strcat(temp, dir[c].name);
 
-							close(dfd);
-							close(lcfd);
+                    if ( strcmp(dir[c].name, ".gopher") != 0 ) {
+                        /* for now, hard code the FQDN of the gopher server in the statement below */
+                        fprint(dfd, "%c%s\t%s\t%s\t70\r\n", filetyp[c],
+                        dir[c].name, temp, HOST_NAME);
+                    }
 
-							free(line);
-							free(path);
+                    free(temp);
+                }
 
-							exits(0);
-						}
+                fprint(dfd, "\r\n.\r\n");
 
-						ndirs = dirreadall(rfd, &dir);
+                free(filetyp);
+            }
+        }			
 
-						close(rfd);
+        /* file */
+        else {
+            /* try to open the file and fail gracefully if it doesnt exist */
+            qfd = open(path, OREAD);
 
-						filetyp = malloc( (ndirs * sizeof(char)) );
+            if ( qfd < 0 ) {
+                timestamp(tstamp);
+                fprint(lgfd, "%s ERROR: Cannot open file %s; child process exiting.\n", tstamp, path);
+                close(lgfd);
 
-						if ( filetyp == 0 ) {
-							exits("MALLOC");
-						}
+                close(dfd);
+                close(lcfd);
 
-						timestamp(tstamp);
-						fprint(lgfd, "%s Read %ld directory entries from %s\n", tstamp, ndirs, path);
+                free(line);
+                free(path);
 
-						/* classify each entry as either a file or a directory */
+                exits(0);
+            }
 
-						for ( c = 0; c < ndirs; c++ ) {
+            else {
+                /* read in the file and spit data back to the client */
+                while((w = read(qfd, fbuf, sizeof(fbuf))) > 0) {
+                    write(dfd, fbuf, w);
+                }
+            }
 
-							if ( (dir[c].mode & 0x80000000) == 0x80000000 ) {
-								filetyp[c] = '1';
-							}
+            close(qfd);
+        }
 
-							else {
-								filetyp[c] = '0';
-							}
-						}
+        close(dfd);
+        close(lcfd);
 
-						/* give the directory listing to the client, line by line */
+        close(lgfd);
 
-						for ( c = 0; c < ndirs; c++ ) {
+        free(line);
+        free(path);
 
-							temp = malloc((strlen(line)+strlen(dir[c].name)+10)*sizeof(char));
+        exits(0);
 
-							if ( temp == 0 ) {
-								exits("MALLOC");
-							}
-
-							strcpy(temp, line);
-
-							if ( temp[strlen(temp)-1] != '/' ) {
-								strcat(temp, "/");
-							}
-
-							strcat(temp, dir[c].name);
-
-							if ( strcmp(dir[c].name, ".gopher") != 0 ) {
-
-								/* for now, hard code the FQDN of the gopher server in the statement below */
-
-								fprint(dfd, "%c%s\t%s\t%s\t70\r\n", filetyp[c],
-									dir[c].name, temp, HOST_NAME);
-							}
-
-							free(temp);
-						}
-
-						fprint(dfd, "\r\n.\r\n");
-
-						free(filetyp);
-					}
-				}			
-
-				/* file */
-
-				else {
-
-					/* try to open the file and fail gracefully if it doesnt exist */
-
-					qfd = open(path, OREAD);
-
-					if ( qfd < 0 ) {
-						timestamp(tstamp);
-						fprint(lgfd, "%s ERROR: Cannot open file %s; child process exiting.\n", tstamp, path);
-						close(lgfd);
-
-						close(dfd);
-						close(lcfd);
-
-						free(line);
-						free(path);
-
-						exits(0);
-					}
-
-					else {
-
-						/* read in the file and spit data back to the client */
-
-						while((w = read(qfd, fbuf, sizeof(fbuf))) > 0) {
-							write(dfd, fbuf, w);
-						}
-					}
-
-					close(qfd);
-				}
-
-				close(dfd);
-				close(lcfd);
-
-				close(lgfd);
-
-				free(line);
-				free(path);
-
-				exits(0);
-
-			/* parent */
-
-			default:
-				close(lcfd);
-
-				break;
-
-		}
-
-	}
+        /* parent */
+        default:
+            close(lcfd);
+            break;
+        }
+    }
 }
 
 /* generate a timestamp for log file entries */
 
 void timestamp(char *stamp) {
+    Tm *ti;
 
-	Tm *ti;
+    ti = localtime(time(0));
 
-	ti = localtime(time(0));
+    sprint(stamp, "%02d/%02d/%04d %02d:%02d:%02d", (ti->mon)+1, ti->mday, (ti->year)+1900,
+        ti->hour, ti->min, ti->sec);
 
-	sprint(stamp, "%02d/%02d/%04d %02d:%02d:%02d", (ti->mon)+1, ti->mday, (ti->year)+1900,
-		ti->hour, ti->min, ti->sec);
-
-	return;
+    return;
 }
 
 int dotgopher(int netfd, int logfd, char *rootd) {
+    int n, fd, r = 0;
+    char stamp[32], *temp, *line;
 
-	int n, fd, r = 0;
-	char stamp[32], *temp, *line;
+    int len = 1;
 
-	int len = 1;
+    /* assemble a path for .gopher and look for it */
+    temp = malloc((strlen(rootd)+10)*sizeof(char));
 
-	/* assemble a path for .gopher and look for it */
+    if (temp == 0) {
+        exits("MALLOC");
+    }
 
-	temp = malloc((strlen(rootd)+10)*sizeof(char));
+    strcpy(temp, rootd);
 
-	if ( temp == 0 ) {
-		exits("MALLOC");
-	}
+    if (temp[strlen(temp)-1] != '/') {
+        strcat(temp, "/");
+    }
 
-	strcpy(temp, rootd);
-
-	if ( temp[strlen(temp)-1] != '/' ) {
-		strcat(temp, "/");
-	}
-
-	strcat(temp, ".gopher");
+    strcat(temp, ".gopher");
 	
-	fd = open(temp, OREAD);
+    fd = open(temp, OREAD);
 
-	timestamp(stamp);
-	fprint(logfd, "%s Looking for .gopher file %s ", stamp, temp);
+    timestamp(stamp);
+    fprint(logfd, "%s Looking for .gopher file %s ", stamp, temp);
 
-	/* if it exists, read it in and dump it to the network */
+    /* if it exists, read it in and dump it to the network */
+    if (fd >= 0) {
+        fprint(logfd, "-> found.\n");
 
-	if ( fd >= 0 ) {
-		
-		fprint(logfd, "-> found.\n");
+        /* set result code */
+        r = 1;
 
-		/* set result code */
+        line = malloc(sizeof(char));
 
-		r = 1;
+        while (1) {
+            n = read(fd, &(*(line+len-1)), 1);
 
-		line = malloc(sizeof(char));
+            line = realloc(line, (len+1)*sizeof(char));
 
-		while (1) {
+            if (line == 0) {
+                exits("REALLOC");
+            }
 
-			n = read(fd, &(*(line+len-1)), 1);
+            if ( *(line+len-1) == 10 ) {
+                *(line+len-1) = '\0';
 
-			line = realloc(line, (len+1)*sizeof(char));
+                /* 
+                 *  if the line looks to be a pre-formed selector just print it out
+                 * directly to the client. it is up to the person composing the .gopher
+                 * file to make sure these are correct (for now). that is, we expect:
+                 *
+                 * [id][selector name]\t[path]\t[server fqdn]\t[gopher port]
+                 *
+                 * the path should have a leading slash in it. i suppose we could correct
+                 * for this programmatically in the future.
+                */
 
-			if ( line == 0 ) {
-				exits("REALLOC");
-			}
+                if ( ((line[0] == '0') || (line[0] == '1') || (line[0] == '2') || (line[0] == '3') ||
+                    (line[0] == '4') || (line[0] == '5') || (line[0] == '6') || (line[0] == '7') ||
+                    (line[0] == '8') || (line[0] == '9') || (line[0] == 'd') || (line[0] == 'g') ||
+                    (line[0] == 'h') || (line[0] == 'i' ) || (line[0] == 'l') || (line[0] == 's')) &&
+                    (counttabs(line) == 3) ) {
 
-			if ( *(line+len-1) == 10 ) {
-				*(line+len-1) = '\0';
+                    fprint(netfd, "%s\r\n", line);
+                }
 
-				/* 
-				  *  if the line looks to be a pre-formed selector just print it out
-				  * directly to the client. it is up to the person composing the .gopher
-				  * file to make sure these are correct (for now). that is, we expect:
-				  *
-				  * [id][selector name]\t[path]\t[server fqdn]\t[gopher port]
-				  *
-				  * the path should have a leading slash in it. i suppose we could correct
-				  * for this programmatically in the future.
-				*/
+                /* otherwise use the de facto i-line to print it as an informational text line */
+                else {
+                    fprint(netfd, "i%s\t\terror.host\t1\r\n", line);
+                }
 
-				if ( ((line[0] == '0') || (line[0] == '1') || (line[0] == '2') || (line[0] == '3') ||
-					(line[0] == '4') || (line[0] == '5') || (line[0] == '6') || (line[0] == '7') ||
-					(line[0] == '8') || (line[0] == '9') || (line[0] == 'd') || (line[0] == 'g') ||
-					(line[0] == 'h') || (line[0] == 'i' ) || (line[0] == 'l') || (line[0] == 's')) &&
-					(counttabs(line) == 3) ) {
+                /* reset the buffer for the next input line */
+                free(line);
+                line = malloc(sizeof(char));
 
-					fprint(netfd, "%s\r\n", line);
-				}
+                if ( line == 0 ) {
+                    exits("MALLOC");
+                }
 
-				/* otherwise use the de facto i-line to print it as an informational text line */
+                len = 1;
+            }
 
-				else {
+            else {
+                len = len + 1;
+            }
 
-					fprint(netfd, "i%s\t\terror.host\t1\r\n", line);
-				}
+            /* eof */
+            if ( n == 0 ) {
+                break;
+            }
+        }
+    }
 
-				/* reset the buffer for the next input line */
+    else {
+        fprint(logfd, " -> not found.\n");
 
-				free(line);
-				line = malloc(sizeof(char));
+        /* return code */
+        r = 0;
 
-				if ( line == 0 ) {
-					exits("MALLOC");
-				}
+        /*
+         * return before hitting the free() statements below since we never called
+         * malloc() in this branch.
+        */
 
-				len = 1;
-			}
+        return r;
+    }
 
-			else {
+    close(fd);
 
-				len = len + 1;
-			}
+    free(temp);
+    free(line);
 
-			/* eof */
-
-			if ( n == 0 ) {
-				break;
-			}
-		}
-	}
-
-	else {
-
-		fprint(logfd, " -> not found.\n");
-
-		/* return code */
-
-		r = 0;
-
-		/*
-		  * return before hitting the free() statements below since we never called
-		  * malloc() in this branch.
-		*/
-
-		return r;
-	}
-
-	close(fd);
-
-	free(temp);
-	free(line);
-
-	/* return result to caller so it knows if .gopher existed or not */
-
-	return r;
+    /* return result to caller so it knows if .gopher existed or not */
+    return r;
 }
 
 /* read in a line from the specified file descriptor to the specified buffer */
 
 int readaline(int infd, char **ptr) {
+    int len = 1;
+    int n;
 
-	int len = 1;
-	int n;
+    *ptr = malloc(sizeof(char));
 
-	*ptr = malloc(sizeof(char));
+    while (1) {
+        n = read(infd, &(*(*ptr+len-1)), 1);
 
-	while (1) {
+        *ptr = realloc(*ptr, (len+1)*sizeof(char));
 
-		n = read(infd, &(*(*ptr+len-1)), 1);
+        if (*ptr == 0) {
+            exits("REALLOC");
+        }
 
-		*ptr = realloc(*ptr, (len+1)*sizeof(char));
+        if (*(*ptr+len-1) == 10) {
+            *(*ptr+len) = '\0';
+            break;
+        }
 
-		if ( *ptr == 0 ) {
-			exits("REALLOC");
-		}
+        /* disconnected */
+        if (n == 0) {
+            exits("DISCONNECTED");
+        }
 
-		if ( *(*ptr+len-1) == 10 ) {
-			*(*ptr+len) = '\0';
-			break;
-		}
+        len = len + 1;
+    }
 
-		/* disconnected */
-
-		if ( n == 0 ) {
-			exits("DISCONNECTED");
-		}
-
-		len = len + 1;
-
-	}
-
-	return len;
+    return len;
 }
 
 /* count tabs in a line */
 
 int counttabs(char *lin) {
+    int i, n = 0;
 
-	int i, n = 0;
+    for (i = 0; i < strlen(lin); i++) {
+        if (lin[i] == '\t') {
+            n++;
+        }
+    }
 
-	for ( i = 0; i < strlen(lin); i++ ) {
-		if ( lin[i] == '\t' ) {
-			n++;
-		}
-	}
-
-	return n;
+    return n;
 }
