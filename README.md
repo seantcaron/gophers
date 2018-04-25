@@ -2,7 +2,7 @@ gophers
 -------
 Sean Caron scaron@umich.edu
 
-=== Installation
+### Installation
 
 1. acme gophers.c
 
@@ -12,11 +12,11 @@ Sean Caron scaron@umich.edu
 
 4. cp ./gophers /usr/you/bin/yourarch
 
-=== Usage
+### Usage
 
 ./gophers [port] [gopher root directory] [logfile]
 
-=== Notes
+### Notes
 
 all command line parameters are mandatory.
 
@@ -54,7 +54,7 @@ repeat forever {
 }
 ```
 
-=== Markup language and .gopher files
+### Markup language and .gopher files
 
 what i am calling gopher markup language is really just lines of text formatted in a way that
 is rfc 1436 (gopher rfc) compliant. that is, lines of text that the client will interpret as valid
