@@ -1,6 +1,8 @@
-gopher server for plan 9 by sean caron (scaron@umich.edu)
+gophers
+-------
+Sean Caron scaron@umich.edu
 
-INSTALLATION
+=== Installation
 
 1. acme gophers.c
 
@@ -10,17 +12,18 @@ INSTALLATION
 
 4. cp ./gophers /usr/you/bin/yourarch
 
-USE
+=== Usage
 
 ./gophers [port] [gopher root directory] [logfile]
 
-NOTES
+=== Notes
 
 all command line parameters are mandatory.
 
 the gopher server serves up documents from the gopher root directory. the theory
 of operation is generally as follows:
 
+```
 repeat forever {
 	get a request from the client
 
@@ -49,14 +52,17 @@ repeat forever {
 		}
 	}
 }
+```
 
-a note on gopher markup language and constructing .gopher files:
+=== Markup language and .gopher files
 
 what i am calling gopher markup language is really just lines of text formatted in a way that
 is rfc 1436 (gopher rfc) compliant. that is, lines of text that the client will interpret as valid
 gopher selectors. they must look like this
 
+```
 [type][selector]\t[path]\t[server name]\t[port]\n
+```
 
 (where \t=tab and \n=hit RETURN)
 
